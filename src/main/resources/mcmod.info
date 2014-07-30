@@ -1,0 +1,20 @@
+[
+    {
+        "modid": "TabulaRasa",
+        "name": "Tabula Rasa",
+        "description": "Blank Slate - Blocks and Items! They do nothing, have no textures, and no recipes. Minetweak away.",
+        "version": "1.0.1",
+        "credits": "Team CoFH",
+        "mcversion": "1.7.10",
+        "url": "http://www.teamcofh.com",
+        "updateUrl": "",
+        "authors": [
+            "King Lemming"
+        ],
+        "parent": "",
+        "screenshots": [],
+        "dependencies": [
+            "MinecraftForge"
+        ]
+    }
+]
