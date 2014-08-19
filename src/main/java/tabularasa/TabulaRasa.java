@@ -63,8 +63,10 @@ public class TabulaRasa {
 				rasaBlocks[i].resistance[j] /= 5;
 			}
 			rasaBlocks[i].setCreativeTab(CreativeTabs.tabBlock);
-			GameRegistry.registerBlock(rasaBlocks[i], ItemBlockRasa.class, "RasaBlock");
+			GameRegistry.registerBlock(rasaBlocks[i], ItemBlockRasa.class, "RasaBlock" + i);
 		}
+
+		// TODO: config for registering custom itemstacks, for minetweaker and such?
 
 		for (int i = 0; i < numItems; i++) {
 			rasaItems[i] = new ItemRasa();
@@ -77,7 +79,7 @@ public class TabulaRasa {
 				rasaItems[i].textures[j] = config.get("item.item" + i, "Texture." + j, "tabularasa:RasaItem").getString();
 			}
 			rasaItems[i].setCreativeTab(CreativeTabs.tabMisc);
-			GameRegistry.registerItem(rasaItems[i], "RasaItem");
+			GameRegistry.registerItem(rasaItems[i], "RasaItem" + i);
 		}
 	}
 
