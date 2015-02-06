@@ -1,4 +1,4 @@
-package tabularasa;
+package cofh.tabularasa;
 
 import cpw.mods.fml.common.Mod;
 import cpw.mods.fml.common.Mod.EventHandler;
@@ -36,7 +36,7 @@ public class TabulaRasa {
 	@EventHandler
 	public void preInit(FMLPreInitializationEvent event) {
 
-		config = new Configuration(new File(event.getModConfigurationDirectory(), "/cofh/TabulaRasa.cfg"));
+		config = new Configuration(new File(event.getModConfigurationDirectory(), "/cofh/tabularasa.cfg"));
 
 		numBlocks = config.getInt("BlockCount", "block.feature", 1, 0, 16, "The number of blocks that you would like to add.");
 		numItems = config.getInt("ItemCount", "item.feature", 1, 0, 16, "The number of items that you would like to add.");
