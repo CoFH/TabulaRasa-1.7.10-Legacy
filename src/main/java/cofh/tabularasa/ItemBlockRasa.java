@@ -1,6 +1,7 @@
 package cofh.tabularasa;
 
 import net.minecraft.block.Block;
+import net.minecraft.item.EnumRarity;
 import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
 
@@ -31,6 +32,12 @@ public class ItemBlockRasa extends ItemBlock {
 	public int getMetadata(int i) {
 
 		return i;
+	}
+
+	@Override
+	public EnumRarity getRarity(ItemStack stack) {
+
+		return EnumRarity.values()[myBlock.rarity[stack.getItemDamage()] % 3];
 	}
 
 }
