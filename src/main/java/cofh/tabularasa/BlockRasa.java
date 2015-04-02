@@ -209,6 +209,7 @@ public class BlockRasa extends Block {
 	}
 
 	@Override
+	@SideOnly(Side.CLIENT)
 	public IIcon getIcon(int side, int metadata) {
 
 		return icons[metadata];

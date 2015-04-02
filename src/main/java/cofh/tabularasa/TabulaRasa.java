@@ -1,5 +1,6 @@
 package cofh.tabularasa;
 
+import cofh.tabularasa.TRParser.TemplateTypes;
 import cpw.mods.fml.common.Mod;
 import cpw.mods.fml.common.Mod.EventHandler;
 import cpw.mods.fml.common.Mod.Instance;
@@ -14,6 +15,7 @@ import net.minecraft.block.Block;
 import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.item.Item;
 import net.minecraftforge.common.config.Configuration;
+import net.minecraftforge.fluids.BlockFluidBase;
 import net.minecraftforge.fluids.Fluid;
 
 @Mod(modid = TabulaRasa.modId, name = TabulaRasa.modName, version = TabulaRasa.version, dependencies = TabulaRasa.dependencies)
@@ -32,68 +34,24 @@ public class TabulaRasa {
 
 	public static final CreativeTabs tab = new TRCreativeTab();
 
-	public static ArrayList<Block> blocks = new ArrayList<Block>();
 	public static ArrayList<Item> items = new ArrayList<Item>();
 	public static ArrayList<Fluid> fluids = new ArrayList<Fluid>();
-
-	public static ArrayList<String> stillIcons;
-	public static ArrayList<String> flowingIcons;
+	public static ArrayList<Block> blocks = new ArrayList<Block>();
+	public static ArrayList<BlockFluidBase> fluidBlocks = new ArrayList<BlockFluidBase>();
 
 	@EventHandler
 	public void preInit(FMLPreInitializationEvent event) {
 
 		configDir = event.getModConfigurationDirectory();
 
-		// config = new Configuration(configDir, "/cofh/tabularasa/common.cfg");
-		//
-		// numBlocks = config.getInt("BlockCount", "block.feature", 1, 0, 16, "The number of blocks that you would like to add.");
-		// numItems = config.getInt("ItemCount", "item.feature", 1, 0, 16, "The number of items that you would like to add.");
-		//
-		// rasaBlocks = new BlockRasa[numBlocks];
-		// rasaItems = new ItemRasa[numItems];
-		//
-		// for (int i = 0; i < numBlocks; i++) {
-		// rasaBlocks[i] = new BlockRasa(Material.rock);
-		//
-		// for (int j = 0; j < 16; j++) {
-		// rasaBlocks[i].names[j] = config.get("block.block" + i, "Name." + j, "BlockRasa").getString();
-		// rasaBlocks[i].textures[j] = config.get("block.block" + i, "Texture." + j, "tabularasa:RasaBlock").getString();
-		// rasaBlocks[i].hardness[j] = (float) config.get("block.block" + i, "Hardness." + j, 1.5D).getDouble(1.5D);
-		// rasaBlocks[i].resistance[j] = (float) config.get("block.block" + i, "Resistance." + j, 10.0D).getDouble(10.0D);
-		//
-		// if (rasaBlocks[i].hardness[j] < 0) {
-		// rasaBlocks[i].hardness[j] = -1.0F;
-		// }
-		// rasaBlocks[i].hardness[j] = MathHelper.clamp_float(rasaBlocks[i].hardness[j], -1.0F, 6000000.0F);
-		// rasaBlocks[i].resistance[j] = MathHelper.clamp_float(rasaBlocks[i].hardness[j], 0.0F, 6000000.0F);
-		//
-		// rasaBlocks[i].resistance[j] *= 3;
-		// rasaBlocks[i].resistance[j] /= 5;
-		// }
-		// rasaBlocks[i].setCreativeTab(CreativeTabs.tabBlock);
-		// GameRegistry.registerBlock(rasaBlocks[i], ItemBlockRasa.class, "RasaBlock" + i);
-		// }
-		//
-		// // TODO: config for registering custom itemstacks, for minetweaker and such?
-		//
-		// for (int i = 0; i < numItems; i++) {
-		// rasaItems[i] = new ItemRasa();
-		// rasaItems[i].numItems = config.getInt("Count", "item.item" + i, 16, 1, 32000, "Number of contiguous metadata entries for this item.");
-		// rasaItems[i].names = new String[rasaItems[i].numItems];
-		// rasaItems[i].textures = new String[rasaItems[i].numItems];
-		//
-		// for (int j = 0; j < rasaItems[i].numItems; j++) {
-		// rasaItems[i].names[j] = config.get("item.item" + i, "Name." + j, "ItemRasa").getString();
-		// rasaItems[i].textures[j] = config.get("item.item" + i, "Texture." + j, "tabularasa:RasaItem").getString();
-		// }
-		// rasaItems[i].setCreativeTab(CreativeTabs.tabMisc);
-		// GameRegistry.registerItem(rasaItems[i], "RasaItem" + i);
-		// }
-
 		TRParser.initialize();
 
 		try {
 			TRParser.parseTemplateFiles();
+			TRParser.parseTemplates(TemplateTypes.ITEM);
+			TRParser.parseTemplates(TemplateTypes.FLUID);
+			TRParser.parseTemplates(TemplateTypes.BLOCK);
+			TRParser.parseTemplates(TemplateTypes.FLUIDBLOCK);
 		} catch (Throwable t) {
 			t.printStackTrace();
 		}
@@ -102,12 +60,16 @@ public class TabulaRasa {
 	@EventHandler
 	public void initialize(FMLInitializationEvent event) {
 
-		// config.save();
 	}
 
 	@EventHandler
 	public void loadComplete(FMLLoadCompleteEvent event) {
 
+		try {
+			TRParser.parseTemplates(TemplateTypes.RECIPE);
+		} catch (Throwable t) {
+			t.printStackTrace();
+		}
 	}
 
 }

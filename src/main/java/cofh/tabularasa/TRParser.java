@@ -6,6 +6,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import cpw.mods.fml.common.registry.GameRegistry;
 
+import gnu.trove.map.hash.THashMap;
+
 import java.io.File;
 import java.io.FileReader;
 import java.io.FilenameFilter;
@@ -18,6 +20,7 @@ import net.minecraft.block.material.Material;
 import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.item.EnumRarity;
 import net.minecraft.item.ItemStack;
+import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.oredict.OreDictionary;
 
@@ -29,6 +32,16 @@ public class TRParser {
 	private static File templateFolder;
 
 	private static Logger log = LogManager.getLogger("TabulaRasa");
+
+	private static THashMap<String, JsonObject> blockTemplates = new THashMap<String, JsonObject>();
+	private static THashMap<String, JsonObject> fluidblockTemplates = new THashMap<String, JsonObject>();
+	private static THashMap<String, JsonObject> itemTemplates = new THashMap<String, JsonObject>();
+	private static THashMap<String, JsonObject> fluidTemplates = new THashMap<String, JsonObject>();
+	private static THashMap<String, JsonObject> recipeTemplates = new THashMap<String, JsonObject>();
+
+	public static enum TemplateTypes {
+		BLOCK, FLUIDBLOCK, ITEM, FLUID, RECIPE;
+	}
 
 	private TRParser() {
 
@@ -62,10 +75,10 @@ public class TRParser {
 		});
 
 		if (fList == null || fList.length <= 0) {
-			log.error("There are no Tabula Rasa Template files present in " + folder + ".");
+			log.info("There are no Tabula Rasa template files present in " + folder + ".");
 			return;
 		}
-		log.info("Tabula Rasa found " + fList.length + " Template files present in " + folder + "/.");
+		log.info("Tabula Rasa found " + fList.length + " template files present in " + folder + "/.");
 		list.addAll(Arrays.asList(fList));
 	}
 
@@ -89,18 +102,68 @@ public class TRParser {
 				log.error("Critical error reading from a template file: " + templateFile + " > Please be sure the file is correct!", t);
 				continue;
 			}
-
 			log.info("Reading template info from: " + templateFile + ":");
 			for (Entry<String, JsonElement> templateEntry : templateList.entrySet()) {
-				try {
-					if (parseTemplate(templateEntry.getKey(), templateEntry.getValue())) {
-						log.debug("Template entry successfully parsed: \"" + templateEntry.getKey() + "\"");
-					} else {
-						log.error("Error parsing template entry: \"" + templateEntry.getKey() + "\" > Please check the parameters. It *may* be a duplicate.");
-					}
-				} catch (Throwable t) {
-					log.fatal("There was a severe error parsing '" + templateEntry.getKey() + "'!", t);
+				if (acquireTemplate(templateEntry.getKey(), templateEntry.getValue())) {
+					log.debug("Entry acquired: \"" + templateEntry.getKey() + "\"");
+				} else {
+					log.error("Error acquiring entry: \"" + templateEntry.getKey() + "\" > Please check the parameters. It *may* be a duplicate.");
 				}
+			}
+		}
+	}
+
+	private static boolean acquireTemplate(String name, JsonElement templateObject) {
+
+		JsonObject template = templateObject.getAsJsonObject();
+
+		String type = template.get("template").getAsString();
+
+		if (type.equals("block")) {
+			return blockTemplates.put(name, template) == null;
+		} else if (type.equals("item")) {
+			return itemTemplates.put(name, template) == null;
+		} else if (type.equals("fluid")) {
+			return fluidTemplates.put(name, template) == null;
+		} else if (type.equals("fluidblock") || type.equals("blockfluid")) {
+			return fluidblockTemplates.put(name, template) == null;
+		} else if (type.equals("recipe")) {
+			return recipeTemplates.put(name, template) == null;
+		}
+		return false;
+	}
+
+	public static void parseTemplates(TemplateTypes templateType) {
+
+		THashMap<String, JsonObject> templates;
+
+		switch (templateType) {
+		case BLOCK:
+			templates = blockTemplates;
+			break;
+		case FLUIDBLOCK:
+			templates = fluidblockTemplates;
+			break;
+		case ITEM:
+			templates = itemTemplates;
+			break;
+		case FLUID:
+			templates = fluidTemplates;
+			break;
+		default:
+			templates = recipeTemplates;
+			break;
+		}
+
+		for (Entry<String, JsonObject> template : templates.entrySet()) {
+			try {
+				if (parseTemplate(template.getKey(), template.getValue())) {
+					log.debug("Template entry successfully parsed: \"" + template.getKey() + "\"");
+				} else {
+					log.error("Error parsing template entry: \"" + template.getKey() + "\" > Please check the parameters. It *may* be a duplicate.");
+				}
+			} catch (Throwable t) {
+				log.fatal("There was a severe error parsing '" + template.getKey() + "'!", t);
 			}
 		}
 	}
@@ -123,6 +186,10 @@ public class TRParser {
 			return parseItemTemplate(name, template, log);
 		} else if (type.equals("fluid")) {
 			return parseFluidTemplate(name, template, log);
+		} else if (type.equals("fluidblock") || type.equals("blockfluid")) {
+			return parseFluidBlockTemplate(name, template, log);
+		} else if (type.equals("recipe")) {
+			return parseRecipeTemplate(name, template, log);
 		}
 		return false;
 	}
@@ -144,82 +211,24 @@ public class TRParser {
 		int metadata = 1;
 		Material material = Material.rock;
 		Block.SoundType stepSound = Block.soundTypeStone;
+		CreativeTabs creativeTab = TabulaRasa.tab;
+		ArrayList<ArrayList<String>> oreNameList = new ArrayList<ArrayList<String>>();
 
 		/* MATERIAL */
 		if (templateObject.has("material")) {
 			String materialType = templateObject.get("material").getAsString();
-
-			if (materialType.equalsIgnoreCase("air")) {
-				material = Material.air;
-			} else if (materialType.equalsIgnoreCase("grass")) {
-				material = Material.grass;
-			} else if (materialType.equalsIgnoreCase("ground")) {
-				material = Material.ground;
-			} else if (materialType.equalsIgnoreCase("wood")) {
-				material = Material.wood;
-			} else if (materialType.equalsIgnoreCase("rock")) {
-				material = Material.rock;
-			} else if (materialType.equalsIgnoreCase("iron")) {
-				material = Material.iron;
-			} else if (materialType.equalsIgnoreCase("anvil")) {
-				material = Material.anvil;
-			} else if (materialType.equalsIgnoreCase("water")) {
-				material = Material.water;
-			} else if (materialType.equalsIgnoreCase("lava")) {
-				material = Material.lava;
-			} else if (materialType.equalsIgnoreCase("leaves")) {
-				material = Material.leaves;
-			} else if (materialType.equalsIgnoreCase("plants")) {
-				material = Material.plants;
-			} else if (materialType.equalsIgnoreCase("vine")) {
-				material = Material.vine;
-			} else if (materialType.equalsIgnoreCase("sponge")) {
-				material = Material.sponge;
-			} else if (materialType.equalsIgnoreCase("cloth")) {
-				material = Material.cloth;
-			} else if (materialType.equalsIgnoreCase("fire")) {
-				material = Material.fire;
-			} else if (materialType.equalsIgnoreCase("sand")) {
-				material = Material.sand;
-			} else if (materialType.equalsIgnoreCase("circuits")) {
-				material = Material.circuits;
-			} else if (materialType.equalsIgnoreCase("carpet")) {
-				material = Material.carpet;
-			} else if (materialType.equalsIgnoreCase("glass")) {
-				material = Material.glass;
-			} else if (materialType.equalsIgnoreCase("redstoneLight")) {
-				material = Material.redstoneLight;
-			} else if (materialType.equalsIgnoreCase("tnt")) {
-				material = Material.tnt;
-			} else if (materialType.equalsIgnoreCase("coral")) {
-				material = Material.coral;
-			} else if (materialType.equalsIgnoreCase("ice")) {
-				material = Material.ice;
-			} else if (materialType.equalsIgnoreCase("packedIce")) {
-				material = Material.packedIce;
-			} else if (materialType.equalsIgnoreCase("snow")) {
-				material = Material.snow;
-			} else if (materialType.equalsIgnoreCase("craftedSnow")) {
-				material = Material.craftedSnow;
-			} else if (materialType.equalsIgnoreCase("cactus")) {
-				material = Material.cactus;
-			} else if (materialType.equalsIgnoreCase("clay")) {
-				material = Material.clay;
-			} else if (materialType.equalsIgnoreCase("gourd")) {
-				material = Material.gourd;
-			} else if (materialType.equalsIgnoreCase("dragonEgg")) {
-				material = Material.dragonEgg;
-			} else if (materialType.equalsIgnoreCase("portal")) {
-				material = Material.portal;
-			} else if (materialType.equalsIgnoreCase("cake")) {
-				material = Material.cake;
-			} else if (materialType.equalsIgnoreCase("web")) {
-				material = Material.web;
-			}
+			material = getMaterial(materialType);
 		}
-		/* ORE NAMES */
-		ArrayList<ArrayList<String>> oreNameList = new ArrayList<ArrayList<String>>();
-
+		/* STEP SOUND */
+		if (templateObject.has("stepSound")) {
+			String soundType = templateObject.get("stepSound").getAsString();
+			stepSound = getStepSound(soundType);
+		}
+		/* CREATIVE TAB */
+		if (templateObject.has("creativeTab")) {
+			String tabType = templateObject.get("creativeTab").getAsString();
+			creativeTab = getCreativeTab(tabType);
+		}
 		JsonElement data = templateObject.get("data");
 		if (data.isJsonArray()) {
 			JsonArray array = data.getAsJsonArray();
@@ -236,67 +245,9 @@ public class TRParser {
 			oreNameList.add(new ArrayList<String>());
 			parseBlockEntry(block, 0, oreNameList.get(0), element, log);
 		}
-		/* STEP SOUND */
-		if (templateObject.has("stepSound")) {
-			String soundType = templateObject.get("stepSound").getAsString();
+		block.setStepSound(stepSound);
+		block.setCreativeTab(creativeTab);
 
-			if (soundType.equalsIgnoreCase("stone")) {
-				stepSound = Block.soundTypeStone;
-			} else if (soundType.equalsIgnoreCase("wood")) {
-				stepSound = Block.soundTypeWood;
-			} else if (soundType.equalsIgnoreCase("gravel")) {
-				stepSound = Block.soundTypeGravel;
-			} else if (soundType.equalsIgnoreCase("grass")) {
-				stepSound = Block.soundTypeGrass;
-			} else if (soundType.equalsIgnoreCase("piston")) {
-				stepSound = Block.soundTypePiston;
-			} else if (soundType.equalsIgnoreCase("metal")) {
-				stepSound = Block.soundTypeMetal;
-			} else if (soundType.equalsIgnoreCase("glass")) {
-				stepSound = Block.soundTypeGlass;
-			} else if (soundType.equalsIgnoreCase("cloth")) {
-				stepSound = Block.soundTypeCloth;
-			} else if (soundType.equalsIgnoreCase("sand")) {
-				stepSound = Block.soundTypeSand;
-			} else if (soundType.equalsIgnoreCase("snow")) {
-				stepSound = Block.soundTypeSnow;
-			} else if (soundType.equalsIgnoreCase("ladder")) {
-				stepSound = Block.soundTypeLadder;
-			} else if (soundType.equalsIgnoreCase("anvil")) {
-				stepSound = Block.soundTypeAnvil;
-			}
-			block.setStepSound(stepSound);
-		}
-		/* CREATIVE TAB */
-		if (templateObject.has("creativeTab")) {
-			String tabType = templateObject.get("creativeTab").getAsString();
-			CreativeTabs creativeTab = TabulaRasa.tab;
-
-			if (tabType.equals("buildingBlocks")) {
-				creativeTab = CreativeTabs.tabBlock;
-			} else if (tabType.equals("decorations")) {
-				creativeTab = CreativeTabs.tabDecorations;
-			} else if (tabType.equals("redstone")) {
-				creativeTab = CreativeTabs.tabRedstone;
-			} else if (tabType.equals("transportation")) {
-				creativeTab = CreativeTabs.tabTransport;
-			} else if (tabType.equals("misc")) {
-				creativeTab = CreativeTabs.tabMisc;
-			} else if (tabType.equals("food")) {
-				creativeTab = CreativeTabs.tabFood;
-			} else if (tabType.equals("tools")) {
-				creativeTab = CreativeTabs.tabTools;
-			} else if (tabType.equals("combat")) {
-				creativeTab = CreativeTabs.tabCombat;
-			} else if (tabType.equals("brewing")) {
-				creativeTab = CreativeTabs.tabBrewing;
-			} else if (tabType.equals("materials")) {
-				creativeTab = CreativeTabs.tabMaterials;
-			} else if (tabType.equals("inventory")) {
-				creativeTab = CreativeTabs.tabInventory;
-			}
-			block.setCreativeTab(creativeTab);
-		}
 		TabulaRasa.blocks.add(block);
 		GameRegistry.registerBlock(block, ItemBlockRasa.class, name);
 
@@ -323,132 +274,17 @@ public class TRParser {
 		/* MATERIAL */
 		if (templateObject.has("material")) {
 			String materialType = templateObject.get("material").getAsString();
-
-			if (materialType.equalsIgnoreCase("air")) {
-				material = Material.air;
-			} else if (materialType.equalsIgnoreCase("grass")) {
-				material = Material.grass;
-			} else if (materialType.equalsIgnoreCase("ground")) {
-				material = Material.ground;
-			} else if (materialType.equalsIgnoreCase("wood")) {
-				material = Material.wood;
-			} else if (materialType.equalsIgnoreCase("rock")) {
-				material = Material.rock;
-			} else if (materialType.equalsIgnoreCase("iron")) {
-				material = Material.iron;
-			} else if (materialType.equalsIgnoreCase("anvil")) {
-				material = Material.anvil;
-			} else if (materialType.equalsIgnoreCase("water")) {
-				material = Material.water;
-			} else if (materialType.equalsIgnoreCase("lava")) {
-				material = Material.lava;
-			} else if (materialType.equalsIgnoreCase("leaves")) {
-				material = Material.leaves;
-			} else if (materialType.equalsIgnoreCase("plants")) {
-				material = Material.plants;
-			} else if (materialType.equalsIgnoreCase("vine")) {
-				material = Material.vine;
-			} else if (materialType.equalsIgnoreCase("sponge")) {
-				material = Material.sponge;
-			} else if (materialType.equalsIgnoreCase("cloth")) {
-				material = Material.cloth;
-			} else if (materialType.equalsIgnoreCase("fire")) {
-				material = Material.fire;
-			} else if (materialType.equalsIgnoreCase("sand")) {
-				material = Material.sand;
-			} else if (materialType.equalsIgnoreCase("circuits")) {
-				material = Material.circuits;
-			} else if (materialType.equalsIgnoreCase("carpet")) {
-				material = Material.carpet;
-			} else if (materialType.equalsIgnoreCase("glass")) {
-				material = Material.glass;
-			} else if (materialType.equalsIgnoreCase("redstoneLight")) {
-				material = Material.redstoneLight;
-			} else if (materialType.equalsIgnoreCase("tnt")) {
-				material = Material.tnt;
-			} else if (materialType.equalsIgnoreCase("coral")) {
-				material = Material.coral;
-			} else if (materialType.equalsIgnoreCase("ice")) {
-				material = Material.ice;
-			} else if (materialType.equalsIgnoreCase("packedIce")) {
-				material = Material.packedIce;
-			} else if (materialType.equalsIgnoreCase("snow")) {
-				material = Material.snow;
-			} else if (materialType.equalsIgnoreCase("craftedSnow")) {
-				material = Material.craftedSnow;
-			} else if (materialType.equalsIgnoreCase("cactus")) {
-				material = Material.cactus;
-			} else if (materialType.equalsIgnoreCase("clay")) {
-				material = Material.clay;
-			} else if (materialType.equalsIgnoreCase("gourd")) {
-				material = Material.gourd;
-			} else if (materialType.equalsIgnoreCase("dragonEgg")) {
-				material = Material.dragonEgg;
-			} else if (materialType.equalsIgnoreCase("portal")) {
-				material = Material.portal;
-			} else if (materialType.equalsIgnoreCase("cake")) {
-				material = Material.cake;
-			} else if (materialType.equalsIgnoreCase("web")) {
-				material = Material.web;
-			}
+			material = getMaterial(materialType);
 		}
 		/* STEP SOUND */
 		if (templateObject.has("stepSound")) {
 			String soundType = templateObject.get("stepSound").getAsString();
-
-			if (soundType.equalsIgnoreCase("stone")) {
-				stepSound = Block.soundTypeStone;
-			} else if (soundType.equalsIgnoreCase("wood")) {
-				stepSound = Block.soundTypeWood;
-			} else if (soundType.equalsIgnoreCase("gravel")) {
-				stepSound = Block.soundTypeGravel;
-			} else if (soundType.equalsIgnoreCase("grass")) {
-				stepSound = Block.soundTypeGrass;
-			} else if (soundType.equalsIgnoreCase("piston")) {
-				stepSound = Block.soundTypePiston;
-			} else if (soundType.equalsIgnoreCase("metal")) {
-				stepSound = Block.soundTypeMetal;
-			} else if (soundType.equalsIgnoreCase("glass")) {
-				stepSound = Block.soundTypeGlass;
-			} else if (soundType.equalsIgnoreCase("cloth")) {
-				stepSound = Block.soundTypeCloth;
-			} else if (soundType.equalsIgnoreCase("sand")) {
-				stepSound = Block.soundTypeSand;
-			} else if (soundType.equalsIgnoreCase("snow")) {
-				stepSound = Block.soundTypeSnow;
-			} else if (soundType.equalsIgnoreCase("ladder")) {
-				stepSound = Block.soundTypeLadder;
-			} else if (soundType.equalsIgnoreCase("anvil")) {
-				stepSound = Block.soundTypeAnvil;
-			}
+			stepSound = getStepSound(soundType);
 		}
 		/* CREATIVE TAB */
 		if (templateObject.has("creativeTab")) {
 			String tabType = templateObject.get("creativeTab").getAsString();
-
-			if (tabType.equals("buildingBlocks")) {
-				creativeTab = CreativeTabs.tabBlock;
-			} else if (tabType.equals("decorations")) {
-				creativeTab = CreativeTabs.tabDecorations;
-			} else if (tabType.equals("redstone")) {
-				creativeTab = CreativeTabs.tabRedstone;
-			} else if (tabType.equals("transportation")) {
-				creativeTab = CreativeTabs.tabTransport;
-			} else if (tabType.equals("misc")) {
-				creativeTab = CreativeTabs.tabMisc;
-			} else if (tabType.equals("food")) {
-				creativeTab = CreativeTabs.tabFood;
-			} else if (tabType.equals("tools")) {
-				creativeTab = CreativeTabs.tabTools;
-			} else if (tabType.equals("combat")) {
-				creativeTab = CreativeTabs.tabCombat;
-			} else if (tabType.equals("brewing")) {
-				creativeTab = CreativeTabs.tabBrewing;
-			} else if (tabType.equals("materials")) {
-				creativeTab = CreativeTabs.tabMaterials;
-			} else if (tabType.equals("inventory")) {
-				creativeTab = CreativeTabs.tabInventory;
-			}
+			creativeTab = getCreativeTab(tabType);
 		}
 		JsonElement element;
 
@@ -467,8 +303,6 @@ public class TRParser {
 			}
 		}
 		block = new BlockRasa(material, metadata);
-		block.setStepSound(stepSound);
-		block.setCreativeTab(creativeTab);
 
 		/* NAME */
 		if (templateObject.has("name")) {
@@ -617,6 +451,9 @@ public class TRParser {
 				}
 			}
 		}
+		block.setStepSound(stepSound);
+		block.setCreativeTab(creativeTab);
+
 		TabulaRasa.blocks.add(block);
 		GameRegistry.registerBlock(block, ItemBlockRasa.class, name);
 
@@ -630,6 +467,95 @@ public class TRParser {
 	}
 
 	private static boolean parseFluidBlockTemplate(String name, JsonObject templateObject, Logger log) {
+
+		if (!templateObject.has("fluid")) {
+			// Fluid absolutely required.
+			return false;
+		}
+		BlockFluidRasa block;
+		Fluid fluid = FluidRegistry.WATER;
+		Material material = Material.water;
+
+		JsonElement element = templateObject.get("name");
+
+		/* FLUID */
+		if (templateObject.has("fluid")) {
+			String fluidName = templateObject.get("fluid").getAsString();
+			fluid = FluidRegistry.getFluid(fluidName);
+
+			if (fluid == null) {
+				log.error("Fluid " + fluidName + " was not found in the fluid registry.");
+				return false;
+			}
+		}
+		/* MATERIAL */
+		if (templateObject.has("material")) {
+			String materialType = templateObject.get("material").getAsString();
+			material = getMaterial(materialType);
+
+			if (!material.isLiquid()) {
+				log.error("Material for Fluid Block " + name + " is not liquid. Using 'water' instead.");
+				material = Material.water;
+			}
+		}
+		block = new BlockFluidRasa(fluid, material);
+
+		/* TEXTURES */
+		if (templateObject.has("texture")) {
+			element = templateObject.get("texture");
+			if (element.isJsonArray()) {
+				JsonArray icons = element.getAsJsonArray();
+				block.textures[0] = icons.get(0).getAsString();
+				block.textures[1] = icons.get(1).getAsString();
+			} else {
+				block.textures[0] = (element.getAsString());
+				block.textures[1] = (element.getAsString());
+			}
+		} else if (templateObject.has("textureStill")) {
+			element = templateObject.get("textureStill");
+			block.textures[0] = element.getAsString();
+			block.textures[1] = (element.getAsString());
+			if (templateObject.has("textureFlowing")) {
+				element = templateObject.get("textureFlowing");
+				block.textures[1] = element.getAsString();
+			}
+		}
+		/* LEVELS */
+		if (templateObject.has("levels")) {
+			element = templateObject.get("levels");
+			block.setQuantaPerBlock(element.getAsInt());
+		}
+		/* TICK RATE */
+		if (templateObject.has("tickRate")) {
+			element = templateObject.get("tickRate");
+			block.setTickRate(element.getAsInt());
+		}
+		/* HARDNESS */
+		if (templateObject.has("hardness")) {
+			element = templateObject.get("hardness");
+			block.setHardness(element.getAsFloat());
+		}
+		/* LIGHT OPACITY */
+		if (templateObject.has("lightOpacity")) {
+			element = templateObject.get("lightOpacity");
+			block.setLightOpacity(element.getAsInt());
+		}
+		/* FLAMMABILITY */
+		if (templateObject.has("flammable")) {
+			element = templateObject.get("flammable");
+			block.flammable = element.getAsBoolean();
+		}
+		if (templateObject.has("flammability")) {
+			element = templateObject.get("flammability");
+			block.flammability = element.getAsInt();
+			block.flammable = true;
+		}
+		if (templateObject.has("fireSpreadSpeed")) {
+			element = templateObject.get("fireSpreadSpeed");
+			block.fireSpreadSpeed = element.getAsInt();
+		}
+		TabulaRasa.fluidBlocks.add(block);
+		GameRegistry.registerBlock(block, name);
 
 		return true;
 	}
@@ -704,7 +630,7 @@ public class TRParser {
 			fluid.setRarity(EnumRarity.values()[rarity]);
 		}
 		if (!FluidRegistry.registerFluid(fluid)) {
-			log.error("Fluid " + name + "failed to register!");
+			log.error("Fluid " + name + " failed to register!");
 			return false;
 		}
 		return true;
@@ -718,6 +644,11 @@ public class TRParser {
 		return parseItemArrays(name, templateObject, log);
 	}
 
+	private static boolean parseRecipeTemplate(String name, JsonObject templateObject, Logger log) {
+
+		return true;
+	}
+
 	private static boolean parseItemEntryList(String name, JsonObject templateObject, Logger log) {
 
 		if (!templateObject.has("data")) {
@@ -725,8 +656,14 @@ public class TRParser {
 		}
 		ItemRasa item;
 		int metadata = 1;
+		CreativeTabs creativeTab = TabulaRasa.tab;
 		ArrayList<ArrayList<String>> oreNameList = new ArrayList<ArrayList<String>>();
 
+		/* CREATIVE TAB */
+		if (templateObject.has("creativeTab")) {
+			String tabType = templateObject.get("creativeTab").getAsString();
+			creativeTab = getCreativeTab(tabType);
+		}
 		JsonElement data = templateObject.get("data");
 		if (data.isJsonArray()) {
 			JsonArray array = data.getAsJsonArray();
@@ -741,6 +678,8 @@ public class TRParser {
 			JsonObject element = data.getAsJsonObject();
 			parseItemEntry(item, 0, oreNameList.get(0), element, log);
 		}
+		item.setCreativeTab(creativeTab);
+
 		TabulaRasa.items.add(item);
 		GameRegistry.registerItem(item, name);
 
@@ -756,16 +695,22 @@ public class TRParser {
 		return true;
 	}
 
-	public static boolean parseItemArrays(String name, JsonObject templateObject, Logger log) {
+	private static boolean parseItemArrays(String name, JsonObject templateObject, Logger log) {
 
 		if (!templateObject.has("name")) {
 			return false;
 		}
 		ItemRasa item;
 		int metadata = 1;
+		CreativeTabs creativeTab = TabulaRasa.tab;
 
 		JsonElement element;
 
+		/* CREATIVE TAB */
+		if (templateObject.has("creativeTab")) {
+			String tabType = templateObject.get("creativeTab").getAsString();
+			creativeTab = getCreativeTab(tabType);
+		}
 		/* METADATA - NAME SIZE USED IF NOT PRESENT */
 		if (templateObject.has("metadata")) {
 			element = templateObject.get("metadata");
@@ -832,6 +777,8 @@ public class TRParser {
 				}
 			}
 		}
+		item.setCreativeTab(creativeTab);
+
 		TabulaRasa.items.add(item);
 		GameRegistry.registerItem(item, name);
 
@@ -918,7 +865,6 @@ public class TRParser {
 		/* ORE NAMES */
 		if (templateObject.has("oreNames")) {
 			element = templateObject.get("oreNames");
-			oreNames = new ArrayList<String>();
 			if (element.isJsonArray()) {
 				JsonArray array = element.getAsJsonArray();
 				for (int j = 0; j < array.size(); j++) {
@@ -947,7 +893,6 @@ public class TRParser {
 		/* ORE NAMES */
 		if (templateObject.has("oreNames")) {
 			element = templateObject.get("oreNames");
-			oreNames = new ArrayList<String>();
 			if (element.isJsonArray()) {
 				JsonArray array = element.getAsJsonArray();
 				for (int j = 0; j < array.size(); j++) {
@@ -957,6 +902,143 @@ public class TRParser {
 				oreNames.add(element.getAsString());
 			}
 		}
+	}
+
+	/* HELPERS */
+	private static Material getMaterial(String materialType) {
+
+		Material material = Material.rock;
+
+		if (materialType.equalsIgnoreCase("air")) {
+			material = Material.air;
+		} else if (materialType.equalsIgnoreCase("grass")) {
+			material = Material.grass;
+		} else if (materialType.equalsIgnoreCase("ground")) {
+			material = Material.ground;
+		} else if (materialType.equalsIgnoreCase("wood")) {
+			material = Material.wood;
+		} else if (materialType.equalsIgnoreCase("rock")) {
+			material = Material.rock;
+		} else if (materialType.equalsIgnoreCase("iron")) {
+			material = Material.iron;
+		} else if (materialType.equalsIgnoreCase("anvil")) {
+			material = Material.anvil;
+		} else if (materialType.equalsIgnoreCase("water")) {
+			material = Material.water;
+		} else if (materialType.equalsIgnoreCase("lava")) {
+			material = Material.lava;
+		} else if (materialType.equalsIgnoreCase("leaves")) {
+			material = Material.leaves;
+		} else if (materialType.equalsIgnoreCase("plants")) {
+			material = Material.plants;
+		} else if (materialType.equalsIgnoreCase("vine")) {
+			material = Material.vine;
+		} else if (materialType.equalsIgnoreCase("sponge")) {
+			material = Material.sponge;
+		} else if (materialType.equalsIgnoreCase("cloth")) {
+			material = Material.cloth;
+		} else if (materialType.equalsIgnoreCase("fire")) {
+			material = Material.fire;
+		} else if (materialType.equalsIgnoreCase("sand")) {
+			material = Material.sand;
+		} else if (materialType.equalsIgnoreCase("circuits")) {
+			material = Material.circuits;
+		} else if (materialType.equalsIgnoreCase("carpet")) {
+			material = Material.carpet;
+		} else if (materialType.equalsIgnoreCase("glass")) {
+			material = Material.glass;
+		} else if (materialType.equalsIgnoreCase("redstoneLight")) {
+			material = Material.redstoneLight;
+		} else if (materialType.equalsIgnoreCase("tnt")) {
+			material = Material.tnt;
+		} else if (materialType.equalsIgnoreCase("coral")) {
+			material = Material.coral;
+		} else if (materialType.equalsIgnoreCase("ice")) {
+			material = Material.ice;
+		} else if (materialType.equalsIgnoreCase("packedIce")) {
+			material = Material.packedIce;
+		} else if (materialType.equalsIgnoreCase("snow")) {
+			material = Material.snow;
+		} else if (materialType.equalsIgnoreCase("craftedSnow")) {
+			material = Material.craftedSnow;
+		} else if (materialType.equalsIgnoreCase("cactus")) {
+			material = Material.cactus;
+		} else if (materialType.equalsIgnoreCase("clay")) {
+			material = Material.clay;
+		} else if (materialType.equalsIgnoreCase("gourd")) {
+			material = Material.gourd;
+		} else if (materialType.equalsIgnoreCase("dragonEgg")) {
+			material = Material.dragonEgg;
+		} else if (materialType.equalsIgnoreCase("portal")) {
+			material = Material.portal;
+		} else if (materialType.equalsIgnoreCase("cake")) {
+			material = Material.cake;
+		} else if (materialType.equalsIgnoreCase("web")) {
+			material = Material.web;
+		}
+		return material;
+	}
+
+	private static Block.SoundType getStepSound(String soundType) {
+
+		Block.SoundType stepSound = Block.soundTypeStone;
+
+		if (soundType.equalsIgnoreCase("stone")) {
+			stepSound = Block.soundTypeStone;
+		} else if (soundType.equalsIgnoreCase("wood")) {
+			stepSound = Block.soundTypeWood;
+		} else if (soundType.equalsIgnoreCase("gravel")) {
+			stepSound = Block.soundTypeGravel;
+		} else if (soundType.equalsIgnoreCase("grass")) {
+			stepSound = Block.soundTypeGrass;
+		} else if (soundType.equalsIgnoreCase("piston")) {
+			stepSound = Block.soundTypePiston;
+		} else if (soundType.equalsIgnoreCase("metal")) {
+			stepSound = Block.soundTypeMetal;
+		} else if (soundType.equalsIgnoreCase("glass")) {
+			stepSound = Block.soundTypeGlass;
+		} else if (soundType.equalsIgnoreCase("cloth")) {
+			stepSound = Block.soundTypeCloth;
+		} else if (soundType.equalsIgnoreCase("sand")) {
+			stepSound = Block.soundTypeSand;
+		} else if (soundType.equalsIgnoreCase("snow")) {
+			stepSound = Block.soundTypeSnow;
+		} else if (soundType.equalsIgnoreCase("ladder")) {
+			stepSound = Block.soundTypeLadder;
+		} else if (soundType.equalsIgnoreCase("anvil")) {
+			stepSound = Block.soundTypeAnvil;
+		}
+		return stepSound;
+	}
+
+	private static CreativeTabs getCreativeTab(String tabType) {
+
+		CreativeTabs creativeTab = TabulaRasa.tab;
+
+		if (tabType.equals("buildingBlocks")) {
+			creativeTab = CreativeTabs.tabBlock;
+		} else if (tabType.equals("decorations")) {
+			creativeTab = CreativeTabs.tabDecorations;
+		} else if (tabType.equals("redstone")) {
+			creativeTab = CreativeTabs.tabRedstone;
+		} else if (tabType.equals("transportation")) {
+			creativeTab = CreativeTabs.tabTransport;
+		} else if (tabType.equals("misc")) {
+			creativeTab = CreativeTabs.tabMisc;
+		} else if (tabType.equals("food")) {
+			creativeTab = CreativeTabs.tabFood;
+		} else if (tabType.equals("tools")) {
+			creativeTab = CreativeTabs.tabTools;
+		} else if (tabType.equals("combat")) {
+			creativeTab = CreativeTabs.tabCombat;
+		} else if (tabType.equals("brewing")) {
+			creativeTab = CreativeTabs.tabBrewing;
+		} else if (tabType.equals("materials")) {
+			creativeTab = CreativeTabs.tabMaterials;
+		} else if (tabType.equals("inventory")) {
+			creativeTab = CreativeTabs.tabInventory;
+		}
+		return creativeTab;
 	}
 
 }
